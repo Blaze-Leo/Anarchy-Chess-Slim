@@ -35,6 +35,7 @@
         dot: {}
     };
 // Last successful move's destination, in this player's orientation.
+    let lastTurnSourcePosition = null;
     let lastTurnPosition = null;
     let activePlayerSid = null;
     let playerASid = null;
@@ -785,40 +786,40 @@ row =>
         canMove = message.can_move === true;
         canRequestUndo = message.can_request_undo === true;
         // Read and validate the last move's destination.
-        const lastTurn = message.last_turn_position;
+        // Read and validate the source and destination of the last move.
+        function parseLastTurnPosition(position) {
+            let row = null;
+            let col = null;
 
-        let lastRow = null;
-        let lastCol = null;
+            if (Array.isArray(position) && position.length === 2) {
+                [row, col] = position;
+            } else if (position && typeof position === "object") {
+                row = position.row ?? position[0] ?? null;
+                col = position.col ?? position[1] ?? null;
+            }
 
-        if (Array.isArray(lastTurn) && lastTurn.length === 2) {
-            [lastRow, lastCol] = lastTurn;
-        } else if (lastTurn && typeof lastTurn === "object") {
-            // Also support { row: ..., col: ... }.
-            lastRow = lastTurn.row ?? lastTurn[0] ?? null;
-            lastCol = lastTurn.col ?? lastTurn[1] ?? null;
+            if (
+                Number.isInteger(row) &&
+                Number.isInteger(col) &&
+                row >= 0 &&
+                row < BOARD_SIZE &&
+                col >= 0 &&
+                col < BOARD_SIZE
+            ) {
+                return { row, col };
+            }
+
+            return null;
         }
 
-        if (
-            Number.isInteger(lastRow) &&
-            Number.isInteger(lastCol) &&
-            lastRow >= 0 &&
-            lastRow < BOARD_SIZE &&
-            lastCol >= 0 &&
-            lastCol < BOARD_SIZE
-        ) {
-            lastTurnPosition = {
-                row: lastRow,
-                col: lastCol
-            };
-        } else {
-            lastTurnPosition = null;
+        lastTurnSourcePosition = parseLastTurnPosition(
+            message.last_turn_source_position
+        );
 
-            console.warn(
-                "Last-move highlight unavailable. Check GAME_STATE.last_turn_position:",
-                lastTurn
-            );
-        }
-// Clear any old selection after a state update.
+        lastTurnPosition = parseLastTurnPosition(
+            message.last_turn_position
+        );
+        // Clear any old selection after a state update.
         selectedPosition = null;
         movementTargets.clear();
         movementOverlays = {
@@ -1286,6 +1287,11 @@ position =>
         }
     }
     function renderLastTurnHighlight(square, row, col) {
+        const isLastMoveSource =
+            lastTurnSourcePosition !== null &&
+            lastTurnSourcePosition.row === row &&
+            lastTurnSourcePosition.col === col;
+
         const isLastMoveDestination =
             lastTurnPosition !== null &&
             lastTurnPosition.row === row &&
@@ -1293,7 +1299,7 @@ position =>
 
         square.classList.toggle(
             "last-turn-highlight",
-            isLastMoveDestination
+            isLastMoveSource || isLastMoveDestination
         );
     }
     function positionKey(row, col) {

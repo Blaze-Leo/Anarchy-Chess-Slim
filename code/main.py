@@ -55,7 +55,8 @@ class Match:
         self.p2 = player_b
         self.active_player = self.p1
         self.lock = asyncio.Lock()
-        # Canonical [row, column] destination of the last successful move.
+        # Canonical [row, column] positions of the last successful move.
+        self.last_turn_source_position = None
         self.last_turn_position = None
         self.result: Optional[str] = None
         # One restorable pre-move snapshot per successfully executed move.
@@ -215,8 +216,16 @@ def build_game_state_payload(match: Match, viewer_sid: str) -> dict:
     # Rotate the board only for Player B.
     if flipped:
         board = [list(reversed(row)) for row in reversed(board)]
-    # Convert the last-move highlight to the viewer's orientation.
+    # Convert both last-move squares to the viewer's orientation.
+    last_turn_source_position = None
     last_turn_position = None
+
+    if match.last_turn_source_position is not None:
+        last_turn_source_position = transform_position(
+            match.last_turn_source_position,
+            flipped,
+        )
+
     if match.last_turn_position is not None:
         last_turn_position = transform_position(
             match.last_turn_position,
@@ -238,6 +247,7 @@ def build_game_state_payload(match: Match, viewer_sid: str) -> dict:
             and match.active_player.session_id == viewer_sid
         ),
         "game_result": match.result,
+        "last_turn_source_position": last_turn_source_position,
         "last_turn_position": last_turn_position,
         "can_request_undo": (
             match.result is None
@@ -379,6 +389,28 @@ async def create_session(request: SessionRequest):
             status_code=400,
         )
     async with state_lock:
+        
+        # Ensure the username is unique.
+        existing_usernames = {
+            player.username.casefold()
+            for player in players.values()
+        }
+
+        if username.casefold() in existing_usernames:
+            base_username = username
+            suffix_length = 3
+
+            # Keep the suffix at three characters and the full
+            # username within the 30-character limit.
+            base_username = base_username[:30 - suffix_length - 1]
+
+            while True:
+                suffix = generate_random_string(suffix_length)
+                candidate_username = f"{base_username}-{suffix}"
+
+                if candidate_username.casefold() not in existing_usernames:
+                    username = candidate_username
+                    break
         
         sid = generate_random_string()
         while sid in players:
@@ -734,6 +766,11 @@ async def handle_do_movement(
                 )
                 match_state_before_move = {
                     "active_player_sid": match.active_player.session_id,
+                    "last_turn_source_position": (
+                        match.last_turn_source_position[:]
+                        if match.last_turn_source_position is not None
+                        else None
+                    ),
                     "last_turn_position": (
                         match.last_turn_position[:]
                         if match.last_turn_position is not None
@@ -769,6 +806,7 @@ async def handle_do_movement(
                             **match_state_before_move,
                         }
                     )
+                    match.last_turn_source_position = source[:]
                     match.last_turn_position = target[:]
                     # Check promotion against the canonical engine board.
                     board = engine.show_state(requested_match_id)
@@ -1187,6 +1225,7 @@ async def handle_action_request_response(
                     match.active_player = (
                         match.p1 if match.p1.session_id == active_player_sid else match.p2
                     )
+                    match.last_turn_source_position = snapshot["last_turn_source_position"]
                     match.last_turn_position = snapshot["last_turn_position"]
                     match.result = snapshot["result"]
                     reset_match_inactivity(match)
