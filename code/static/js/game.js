@@ -784,21 +784,40 @@ row =>
         playerBSid = message.player_b_sid;
         canMove = message.can_move === true;
         canRequestUndo = message.can_request_undo === true;
-        lastTurnPosition = (
-            Array.isArray(message.last_turn_position) &&
-            message.last_turn_position.length === 2 &&
-            Number.isInteger(message.last_turn_position[0]) &&
-            Number.isInteger(message.last_turn_position[1]) &&
-            message.last_turn_position[0] >= 0 &&
-            message.last_turn_position[0] < BOARD_SIZE &&
-            message.last_turn_position[1] >= 0 &&
-            message.last_turn_position[1] < BOARD_SIZE
-        )
-            ? {
-                row: message.last_turn_position[0],
-                col: message.last_turn_position[1]
-            }
-            : null;
+        // Read and validate the last move's destination.
+        const lastTurn = message.last_turn_position;
+
+        let lastRow = null;
+        let lastCol = null;
+
+        if (Array.isArray(lastTurn) && lastTurn.length === 2) {
+            [lastRow, lastCol] = lastTurn;
+        } else if (lastTurn && typeof lastTurn === "object") {
+            // Also support { row: ..., col: ... }.
+            lastRow = lastTurn.row ?? lastTurn[0] ?? null;
+            lastCol = lastTurn.col ?? lastTurn[1] ?? null;
+        }
+
+        if (
+            Number.isInteger(lastRow) &&
+            Number.isInteger(lastCol) &&
+            lastRow >= 0 &&
+            lastRow < BOARD_SIZE &&
+            lastCol >= 0 &&
+            lastCol < BOARD_SIZE
+        ) {
+            lastTurnPosition = {
+                row: lastRow,
+                col: lastCol
+            };
+        } else {
+            lastTurnPosition = null;
+
+            console.warn(
+                "Last-move highlight unavailable. Check GAME_STATE.last_turn_position:",
+                lastTurn
+            );
+        }
 // Clear any old selection after a state update.
         selectedPosition = null;
         movementTargets.clear();
@@ -1267,17 +1286,15 @@ position =>
         }
     }
     function renderLastTurnHighlight(square, row, col) {
-        if (
-            !lastTurnPosition ||
-            lastTurnPosition.row !== row ||
-            lastTurnPosition.col !== col
-        ) {
-            return;
-        }
-        const highlight = document.createElement("span");
-        highlight.className = "last-turn-highlight";
-        highlight.setAttribute("aria-hidden", "true");
-        square.appendChild(highlight);
+        const isLastMoveDestination =
+            lastTurnPosition !== null &&
+            lastTurnPosition.row === row &&
+            lastTurnPosition.col === col;
+
+        square.classList.toggle(
+            "last-turn-highlight",
+            isLastMoveDestination
+        );
     }
     function positionKey(row, col) {
         return `${row},${col}`;

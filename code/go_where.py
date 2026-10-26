@@ -16,14 +16,23 @@ from typing import Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 from constants import *  # noqa: F401,F403 - piece codes and BOARD_SIZE are project constants
 
 Position = Tuple[int, int]
+
 CaptureList = List[Position]
+
 Move = Tuple[Position, CaptureList]
+
 Board = List[List[int]]
+
 MoveList = List[Move]
+
 # Public move-generation functions return (moves, forced).
+
 MovementResult = Tuple[MoveList, bool]
+
 ORTHOGONAL_DIRS: Tuple[Position, ...] = ((-1, 0), (1, 0), (0, -1), (0, 1))
+
 DIAGONAL_DIRS: Tuple[Position, ...] = ((-1, -1), (-1, 1), (1, -1), (1, 1))
+
 HORSE_OFFSETS: Tuple[Position, ...] = (
     (-2, -1),
     (-2, 1),
@@ -34,9 +43,11 @@ HORSE_OFFSETS: Tuple[Position, ...] = (
     (2, -1),
     (2, 1),
 )
+
 PAWN_TYPES = {PAWN, STERILE_PAWN, UNDERAGE_PAWN}
 
 # ---------------------------------------------------------------------------
+
 # Internal helpers
 
 # ---------------------------------------------------------------------------
@@ -48,6 +59,7 @@ def _in_bounds(row: int, col: int) -> bool:
 
 def _valid_position(position: object) -> Optional[Position]:
     """Return a normalized board coordinate, or None if it is invalid."""
+
     if not isinstance(position, (tuple, list)) or len(position) != 2:
         return None
     row, col = position
@@ -78,6 +90,7 @@ def _is_friendly(value: int, mover_is_white: bool) -> bool:
 
 def _can_land(target_value: int, mover_is_white: bool) -> bool:
     """Normal pieces may land on empty or enemy-occupied squares."""
+
     return target_value == EMPTY or _is_enemy(target_value, mover_is_white)
 
 
@@ -105,6 +118,7 @@ def _deduplicate_positions(positions: Iterable[Position]) -> List[Position]:
 
 def _deduplicate_moves(moves: Iterable[Move]) -> MoveList:
     """Deduplicate identical destination/capture combinations, preserving order."""
+
     seen: Set[Tuple[Position, Tuple[Position, ...]]] = set()
     result: MoveList = []
     for destination, captures in moves:
@@ -118,6 +132,7 @@ def _deduplicate_moves(moves: Iterable[Move]) -> MoveList:
 
 def _move_to(position: Position, board: Board, mover_is_white: bool) -> Move:
     """Make a normal move, marking an enemy piece on the destination for capture."""
+
     value = board[position[0]][position[1]]
     captures = [position] if value != EMPTY and _is_enemy(value, mover_is_white) else []
     return position, captures
@@ -137,6 +152,7 @@ def _sliding_moves(
     mover_is_white: bool,
 ) -> MoveList:
     """Sliding movement; the first occupied square stops each ray."""
+
     moves: MoveList = []
     for dr, dc in directions:
         nr, nc = row + dr, col + dc
@@ -164,6 +180,7 @@ def _horse_moves(row: int, col: int, board: Board, mover_is_white: bool) -> Move
 
 def _rook_two_moves(row: int, col: int, board: Board, mover_is_white: bool) -> MoveList:
     """Rook-like movement limited to two squares, without jumping."""
+
     moves: MoveList = []
     for dr, dc in ORTHOGONAL_DIRS:
         for distance in (1, 2):
@@ -195,12 +212,14 @@ def _value_after_captures(
     board: Board, position: Position, captures: FrozenSet[Position]
 ) -> int:
     """Treat pieces captured earlier in a simulated chain as having been removed."""
+
     if position in captures:
         return EMPTY
     return board[position[0]][position[1]]
 
 
 # ---------------------------------------------------------------------------
+
 # Bouncing Bishop
 
 # ---------------------------------------------------------------------------
@@ -210,6 +229,7 @@ def _bouncing_bishop_moves(
     row: int, col: int, board: Board, mover_is_white: bool
 ) -> MoveList:
     """Trace each reflected diagonal ray until it returns or hits a piece."""
+
     start = (row, col)
     moves: MoveList = []
     for initial_dr, initial_dc in DIAGONAL_DIRS:
@@ -237,7 +257,9 @@ def _bouncing_bishop_moves(
                 moves.append(((nr, nc), []))
                 r, c = nr, nc
                 continue
+
             # Bishop must capture an Underage Pawn even if it is friendly.
+
             if abs(value) == UNDERAGE_PAWN:
                 moves.append(((nr, nc), [(nr, nc)]))
             elif _is_enemy(value, mover_is_white):
@@ -250,6 +272,7 @@ def _forced_underage_capture_moves(
     moves: Iterable[Move], board: Board
 ) -> MovementResult:
     """Keep only Bishop moves that land on an Underage Pawn, when any exist."""
+
     unique_moves = _deduplicate_moves(moves)
     forced_moves = [
         move
@@ -262,6 +285,7 @@ def _forced_underage_capture_moves(
 
 
 # ---------------------------------------------------------------------------
+
 # Checker
 
 # ---------------------------------------------------------------------------
@@ -271,20 +295,23 @@ def _checker_simple_moves(
     row: int, col: int, board: Board, mover_is_white: bool
 ) -> MoveList:
     """Generate Checker's unobstructed one- and two-square diagonal moves.
-
     Ordinary diagonal moves only land on empty squares. A two-square move is
     allowed as a normal move only when the intervening square is empty. If a
     piece occupies that intervening square, the destination is handled by the
     hop rules instead.
     """
+
     moves: MoveList = []
     for dr, dc in DIAGONAL_DIRS:
+
         # One-square diagonal step.
+
         nr, nc = row + dr, col + dc
         if _in_bounds(nr, nc) and board[nr][nc] == EMPTY:
             moves.append(((nr, nc), []))
 
         # Two-square diagonal move over an empty intermediate square.
+
         middle = (row + dr, col + dc)
         destination = (row + 2 * dr, col + 2 * dc)
         if (
@@ -294,25 +321,20 @@ def _checker_simple_moves(
             and board[destination[0]][destination[1]] == EMPTY
         ):
             moves.append((destination, []))
-
     return _deduplicate_moves(moves)
 
 
 def _checker_hops(row: int, col: int, board: Board, mover_is_white: bool) -> MoveList:
-    """Generate enemy-capturing jumps and allow one non-capturing friendly hop.
-
-    A Checker can jump a consecutive run of enemies, capturing every enemy in
-    that run, and can chain enemy jumps. It may also jump over one friendly
-    piece during a move; that friendly piece is not captured. Friendly pieces
-    cannot be jumped more than once in the same move, and a friendly hop cannot
-    pass through a run of pieces. Every hop must land on an empty, on-board
-    square immediately beyond the jumped piece or enemy run.
+    """Generate enemy-capturing chains or a single non-capturing friendly hop.
+    A Checker may chain hops only when every hop captures enemy pieces. It may
+    instead make one hop over a friendly piece, which is not captured, but that
+    friendly hop must be the entire move: it cannot be combined with enemy hops
+    before or after it. Every hop lands on an empty, on-board square immediately
+    beyond the jumped piece or consecutive enemy run.
     """
     start = (row, col)
     results: MoveList = []
-    explored: Set[
-        Tuple[Position, FrozenSet[Position], Tuple[Position, ...], bool]
-    ] = set()
+    explored: Set[Tuple[Position, FrozenSet[Position], Tuple[Position, ...]]] = set()
 
     def simulated_value(position: Position, captured: FrozenSet[Position]) -> int:
         # The Checker vacates its original square, and captured enemies are
@@ -325,42 +347,31 @@ def _checker_hops(row: int, col: int, board: Board, mover_is_white: bool) -> Mov
         current: Position,
         considered: FrozenSet[Position],
         capture_history: Tuple[Position, ...],
-        friendly_jump_used: bool,
     ) -> None:
-        state = (current, considered, capture_history, friendly_jump_used)
+        state = (current, considered, capture_history)
         if state in explored:
             return
         explored.add(state)
         captured_set = frozenset(capture_history)
-
         for dr, dc in DIAGONAL_DIRS:
             first = (current[0] + dr, current[1] + dc)
             if not _in_bounds(*first):
                 continue
-
             first_value = simulated_value(first, captured_set)
             if first_value == EMPTY:
                 # Empty squares are handled by ordinary movement, not as hops.
                 continue
-
             if _is_friendly(first_value, mover_is_white):
-                # Allow exactly one friendly-piece hop in the entire move.
-                if friendly_jump_used:
+                # A friendly hop is standalone and cannot follow an enemy hop.
+                if capture_history:
                     continue
                 landing = (first[0] + dr, first[1] + dc)
                 if not _in_bounds(*landing):
                     continue
                 if landing == start or simulated_value(landing, captured_set) != EMPTY:
                     continue
-
                 # The friendly piece is deliberately not added to captures.
-                results.append((landing, list(capture_history)))
-                explore(
-                    landing,
-                    considered,
-                    capture_history,
-                    True,
-                )
+                results.append((landing, []))
                 continue
 
             # Jump over a consecutive run of enemies. Stop if a friendly piece
@@ -383,32 +394,27 @@ def _checker_hops(row: int, col: int, board: Board, mover_is_white: bool) -> Mov
                 continue
             if probe == start or simulated_value(probe, captured_set) != EMPTY:
                 continue
-
             new_captures = tuple(
                 square for square in jumped_enemies if square not in captured_set
             )
             next_capture_history = capture_history + new_captures
             next_considered = considered | frozenset(jumped_enemies)
             results.append((probe, list(next_capture_history)))
-            explore(
-                probe,
-                next_considered,
-                next_capture_history,
-                friendly_jump_used,
-            )
+            explore(probe, next_considered, next_capture_history)
 
-    explore(start, frozenset(), (), False)
+    explore(start, frozenset(), ())
     return _deduplicate_moves(results)
 
 
 # ---------------------------------------------------------------------------
+
 # Traitor Rook and special-move destinations
 
 # ---------------------------------------------------------------------------
 
 
-def _traitorrook_controllers(row: int, col: int, board: Board) -> Tuple[bool, bool]:
-    """Return (white_controls, black_controls); ties allow both sides."""
+def _traitorrook_adjacent_counts(row: int, col: int, board: Board) -> Tuple[int, int]:
+    """Return counts of adjacent white and black pieces around a Traitor Rook."""
     white_count = black_count = 0
     for dr in (-1, 0, 1):
         for dc in (-1, 0, 1):
@@ -424,11 +430,12 @@ def _traitorrook_controllers(row: int, col: int, board: Board) -> Tuple[bool, bo
                 white_count += 1
             else:
                 black_count += 1
-    return white_count > black_count, black_count > white_count
+    return white_count, black_count
 
 
 def _castling_moves(row: int, col: int, board: Board, mover_is_white: bool) -> MoveList:
     """Return king destinations and friendly Bishops captured on landing squares."""
+
     if mover_is_white:
         king_start = (BOARD_SIZE - 1, 5)
         rook_starts = [(BOARD_SIZE - 1, 0), (BOARD_SIZE - 1, BOARD_SIZE - 1)]
@@ -492,6 +499,7 @@ def knooklear_fusion_moves(position: Position, board: Board) -> MoveList:
     The resulting Knook placement is an action effect and is handled outside
     this move-generation module.
     """
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return []
@@ -506,7 +514,9 @@ def knooklear_fusion_moves(position: Position, board: Board) -> MoveList:
     for target_row in range(BOARD_SIZE):
         for target_col in range(BOARD_SIZE):
             target_value = board[target_row][target_col]
+
             # Fusion requires a friendly piece of the other type.
+
             if abs(target_value) != target_type:
                 continue
             if (target_value > 0) != mover_is_white:
@@ -515,7 +525,9 @@ def knooklear_fusion_moves(position: Position, board: Board) -> MoveList:
             dr = target_row - row
             dc = target_col - col
             if piece_type == ROOK:
+
                 # A Rook must reach the Horse along an unobstructed rank/file.
+
                 if dr != 0 and dc != 0:
                     continue
                 step_r = 0 if dr == 0 else (1 if dr > 0 else -1)
@@ -531,11 +543,16 @@ def knooklear_fusion_moves(position: Position, board: Board) -> MoveList:
                 if not path_clear:
                     continue
             else:
+
                 # A Horse must reach the Rook using knight movement.
+
                 if (dr, dc) not in HORSE_OFFSETS:
                     continue
+
             # Capture every occupied square in the destination-centered 3x3.
+
             # The moving piece's origin is excluded because it vacates.
+
             captures: CaptureList = []
             for blast_row in range(
                 max(0, target_row - 1),
@@ -560,6 +577,7 @@ def queen_beta_decay_moves(position: Position, board: Board) -> MoveList:
     is down. The move's destination and capture marker are both the Queen's
     square, which engine.py recognizes as this special transformation.
     """
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return []
@@ -579,7 +597,9 @@ def queen_beta_decay_moves(position: Position, board: Board) -> MoveList:
         for spawn_pos in spawn_positions
     ):
         return []
+
     # Preserve the Queen's own square as the final destination/capture marker.
+
     return [(pos, [pos])]
 
 
@@ -587,6 +607,7 @@ def _queentum_tunnel_moves(
     row: int, col: int, board: Board, mover_is_white: bool
 ) -> MoveList:
     """Return the friendly Queen/Antiqueen counterpart as a swap destination."""
+
     value = board[row][col]
     if abs(value) == QUEEN:
         other_type = ANTIQUEEN
@@ -614,27 +635,36 @@ def _il_vaticano_moves(
     The move lands on the other Bishop's square and captures the two
     intervening enemy pieces.
     """
+
     moves: MoveList = []
     directions = ORTHOGONAL_DIRS + DIAGONAL_DIRS
     for dr, dc in directions:
         first_between = (row + dr, col + dc)
         second_between = (row + 2 * dr, col + 2 * dc)
         destination = (row + 3 * dr, col + 3 * dc)
+
         # The destination Bishop must be on the board.
+
         if not _in_bounds(*destination):
             continue
+
         # Both intermediate positions must be on the board.
+
         if not _in_bounds(*first_between) or not _in_bounds(*second_between):
             continue
         target_value = board[destination[0]][destination[1]]
+
         # The destination must contain another friendly Bishop.
+
         if abs(target_value) != BISHOP:
             continue
         if (target_value > 0) != mover_is_white:
             continue
         first_value = board[first_between[0]][first_between[1]]
         second_value = board[second_between[0]][second_between[1]]
+
         # Both pieces between the Bishops must be enemies.
+
         if not _is_enemy(first_value, mover_is_white):
             continue
         if not _is_enemy(second_value, mover_is_white):
@@ -644,6 +674,7 @@ def _il_vaticano_moves(
 
 
 # ---------------------------------------------------------------------------
+
 # Pawns and en passant
 
 # ---------------------------------------------------------------------------
@@ -697,6 +728,7 @@ def _pawn_all_moves(
     first_move_steps: Optional[int],
 ) -> MoveList:
     """Generate ordinary pawn moves only; En Passant is handled by where_to."""
+
     moves = _pawn_moves(row, col, board, mover_is_white)
     moves.extend(_pawn_capture_moves(row, col, board, mover_is_white))
     if first_move_steps is not None:
@@ -709,6 +741,7 @@ def _pawn_all_moves(
 
 
 # ---------------------------------------------------------------------------
+
 # Public movement functions
 
 # ---------------------------------------------------------------------------
@@ -752,6 +785,7 @@ def where_to_queen(position: Position, board: Board) -> MovementResult:
 
 def where_to_bishop(position: Position, board: Board) -> MovementResult:
     """Generate all reflected diagonal moves, then apply forced Underage capture."""
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -759,8 +793,11 @@ def where_to_bishop(position: Position, board: Board) -> MovementResult:
     mover_is_white = _mover_is_white(pos, board, BISHOP)
     if mover_is_white is None:
         return [], False
+
     # Each ray is traced completely, including any edge reflections, until it
+
     # returns to the Bishop or encounters its first occupied square.
+
     moves = _bouncing_bishop_moves(row, col, board, mover_is_white)
     moves.extend(_il_vaticano_moves(row, col, board, mover_is_white))
     return _forced_underage_capture_moves(moves, board)
@@ -791,7 +828,8 @@ def where_to_horse(position: Position, board: Board) -> MovementResult:
 
 
 def where_to_checker(position: Position, board: Board) -> MovementResult:
-    """Generate one-/two-square moves plus all connected hop-chain landings."""
+    """Generate simple moves, enemy-only hop chains, and standalone friendly hops."""
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -819,6 +857,7 @@ def where_to_knook(position: Position, board: Board) -> MovementResult:
 
 def where_to_pawn(position: Position, board: Board) -> MovementResult:
     """Normal Pawn movement and captures; En Passant is handled by where_to."""
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -833,6 +872,7 @@ def where_to_pawn(position: Position, board: Board) -> MovementResult:
 
 def where_to_sterilepawn(position: Position, board: Board) -> MovementResult:
     """Sterile Pawn normal movement and captures; no special first move."""
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -847,6 +887,7 @@ def where_to_sterilepawn(position: Position, board: Board) -> MovementResult:
 
 def where_to_underagepawn(position: Position, board: Board) -> MovementResult:
     """Underage Pawn normal movement and captures, with a two-square first move."""
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -883,25 +924,24 @@ def where_to_traitorrook(
     piece_is_white = _mover_is_white(pos, board, TRAITORROOK)
     if piece_is_white is None:
         return [], False
-    white_controls, black_controls = _traitorrook_controllers(row, col, board)
-    if current_side_is_white is True:
-        if not white_controls:
-            return [], False
-        mover_is_white = True
-    elif current_side_is_white is False:
-        if not black_controls:
-            return [], False
-        mover_is_white = False
-    else:
-        mover_is_white = piece_is_white
-        if mover_is_white and not white_controls:
-            return [], False
-        if not mover_is_white and not black_controls:
-            return [], False
+
+    # The active side controls/moves this piece regardless of its temporarily
+    # inverted sign on the working board.
+    mover_is_white = (
+        piece_is_white if current_side_is_white is None else current_side_is_white
+    )
+    white_count, black_count = _traitorrook_adjacent_counts(row, col, board)
+    current_count = white_count if mover_is_white else black_count
+    opposite_count = black_count if mover_is_white else white_count
+
+    # The active side must have strictly more adjacent pieces than its opponent.
+    if current_count <= opposite_count:
+        return [], False
     return _sliding_moves(row, col, ORTHOGONAL_DIRS, board, mover_is_white), False
 
 
 # ---------------------------------------------------------------------------
+
 # Compatibility helpers for pawn capture / first-move UI calls
 
 # ---------------------------------------------------------------------------
@@ -913,6 +953,7 @@ def _capture_by_pawn_type(
     piece_type: int,
 ) -> MovementResult:
     """Return ordinary diagonal pawn captures only; En Passant is dispatcher-only."""
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -957,6 +998,7 @@ def first_move_underagepawn(position: Position, board: Board) -> MovementResult:
 # No first_move_sterilepawn by design.
 
 # ---------------------------------------------------------------------------
+
 # Dispatcher and Forced En Passant
 
 # ---------------------------------------------------------------------------
@@ -976,6 +1018,7 @@ def _forced_en_passant_map(
     immediately behind that newly found piece is on-board and empty. If the
     chain cannot continue, the last valid destination and captures are returned.
     """
+
     previous_pawn_pos = _valid_position(en_passant_pawn_position)
     if previous_pawn_pos is None:
         return {}
@@ -986,13 +1029,17 @@ def _forced_en_passant_map(
     previous_pawn_is_white = previous_value > 0
     if previous_pawn_is_white == current_side_is_white:
         return {}
+
     # White advances toward lower row indices; Black advances toward higher.
+
     behind_step = 1 if previous_pawn_is_white else -1
     first_destination = (pr + behind_step, pc)
     if not _in_bounds(*first_destination):
         return {}
     if board[first_destination[0]][first_destination[1]] != EMPTY:
+
         # A blocked first En Passant square means En Passant is unavailable.
+
         return {}
     forced: Dict[Position, MoveList] = {}
     for adjacent_col in (pc - 1, pc + 1):
@@ -1004,8 +1051,11 @@ def _forced_en_passant_map(
             continue
         if (source_value > 0) != current_side_is_white:
             continue
+
         # A pawn on the right chains toward the left; one on the left chains
+
         # toward the right. The initial last-moved pawn is always captured.
+
         chain_side_step = -1 if adjacent_col > pc else 1
         destination = first_destination
         captures: List[Position] = [previous_pawn_pos]
@@ -1016,16 +1066,23 @@ def _forced_en_passant_map(
             side_value = board[side_position[0]][side_position[1]]
             if side_value == EMPTY:
                 break
+
             # Continue behind the newly found piece, not behind the previous
+
             # destination. The destination therefore follows the chain sideways
+
             # as well as advancing one row behind each newly captured piece.
+
             next_destination = (side_position[0] + behind_step, side_position[1])
             if not _in_bounds(*next_destination):
                 break
             if board[next_destination[0]][next_destination[1]] != EMPTY:
                 break
+
             # The next hop is possible, so include this side piece in the
+
             # capture list and set the final destination directly behind it.
+
             if side_position not in captures:
                 captures.append(side_position)
             destination = next_destination
@@ -1047,6 +1104,7 @@ def where_to(
     Each move is ``(destination, capture_positions)``. ``forced`` is True when
     Forced En Passant applies, or when a Bishop must capture an Underage Pawn.
     """
+
     pos = _valid_position(position)
     if pos is None or not _board_is_valid(board):
         return [], False
@@ -1063,9 +1121,13 @@ def where_to(
     )
     if piece_type != TRAITORROOK and selected_side_is_white != active_side:
         return [], False
+
     # En Passant is isolated here: pawn movement functions only generate normal
+
     # forward moves and diagonal captures. If any active-side pawn is adjacent
+
     # to the previous pawn, only those eligible pawns may move.
+
     forced_ep = _forced_en_passant_map(board, en_passant_pawn_position, active_side)
     if forced_ep:
         if pos in forced_ep:
@@ -1098,19 +1160,47 @@ def show_all_movements(
 ) -> List[List[Optional[MovementResult]]]:
     """Precompute movement results for every occupied square.
     Each occupied square stores the (moves, forced) result returned by
-    where_to(). Empty squares store None.
+    where_to(). Empty squares store None. Traitor Rooks are sign-inverted on a
+    working board so they appear as enemies to ordinary movement generators;
+    the caller's actual board is never mutated.
     """
     all_movements: List[List[Optional[MovementResult]]] = [
         [None for _ in row] for row in board
     ]
+
+    # With an explicit active side, preprocess the board once for the whole
+    # movement snapshot.
+    shared_movement_board: Optional[Board] = None
+    if current_side_is_white is not None:
+        shared_movement_board = [row_values.copy() for row_values in board]
+        traitorrook_sign = -TRAITORROOK if current_side_is_white else TRAITORROOK
+        for scan_row in range(len(shared_movement_board)):
+            for scan_col in range(len(shared_movement_board[scan_row])):
+                if abs(shared_movement_board[scan_row][scan_col]) == TRAITORROOK:
+                    shared_movement_board[scan_row][scan_col] = traitorrook_sign
     for row in range(len(board)):
         for col in range(len(board[row])):
-            if board[row][col] == 0:
+            piece_value = board[row][col]
+            if piece_value == EMPTY:
                 continue
+
+            # When no active side is supplied, preserve the existing behaviour
+            # of generating moves relative to each selected piece's own side.
+            if shared_movement_board is not None:
+                movement_board = shared_movement_board
+                active_side = current_side_is_white
+            else:
+                active_side = piece_value > 0
+                movement_board = [row_values.copy() for row_values in board]
+                traitorrook_sign = -TRAITORROOK if active_side else TRAITORROOK
+                for scan_row in range(len(movement_board)):
+                    for scan_col in range(len(movement_board[scan_row])):
+                        if abs(movement_board[scan_row][scan_col]) == TRAITORROOK:
+                            movement_board[scan_row][scan_col] = traitorrook_sign
             all_movements[row][col] = where_to(
                 (row, col),
-                board,
+                movement_board,
                 en_passant_pawn_position=en_passant_pawn_position,
-                current_side_is_white=current_side_is_white,
+                current_side_is_white=active_side,
             )
     return all_movements
