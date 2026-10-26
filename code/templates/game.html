@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anarchy Chess | Game</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+</head>
+<body>
+    <main id="game-container"
+          data-session-id="{{ sid }}"
+          data-match-id="{{ match_id }}">
+
+        <header class="game-header">
+            <div class="brand">
+                <h1>ANARCHY CHESS</h1>
+                <p>Custom chess. Different rules.</p>
+            </div>
+            <div class="connection-status">
+                <span id="connection-indicator" class="status-indicator disconnected"></span>
+                <span id="connection-text">Connecting...</span>
+            </div>
+        </header>
+
+        <section class="game-information">
+            <div class="player-card" id="black-player">
+                <div class="player-piece" aria-hidden="true">♚</div>
+                <div class="player-details">
+                    <span class="player-color">OPPONENT</span>
+                    <strong id="black-player-name">Connecting...</strong>
+                </div>
+                <span id="black-turn-indicator" class="turn-indicator"></span>
+            </div>
+
+            <div class="match-information">
+                <span class="match-label">MATCH</span>
+                <strong id="match-id">{{ match_id }}</strong>
+            </div>
+        </section>
+
+        <section class="game-layout">
+            <div class="board-section">
+                <div class="board-wrapper">
+                    <div id="chessboard" class="chessboard" role="grid" aria-label="10 by 10 game board">
+                        <!-- game.js generates all 100 squares -->
+                    </div>
+                </div>
+
+                <div class="player-card white-player" id="white-player">
+                    <div class="player-piece" aria-hidden="true">♔</div>
+                    <div class="player-details">
+                        <span class="player-color">YOU</span>
+                        <strong id="white-player-name">Connecting...</strong>
+                    </div>
+                    <span id="white-turn-indicator" class="turn-indicator"></span>
+                </div>
+
+                <div id="game-status" class="game-status" role="status" aria-live="polite">
+                    Waiting for game state...
+                </div>
+            </div>
+
+            <aside class="game-sidebar">
+                <section class="sidebar-panel">
+                    <h2>Move History</h2>
+                    <div id="move-history" class="move-history" aria-live="polite">
+                        <p class="empty-message">Moves will appear here.</p>
+                    </div>
+                </section>
+
+                <section class="sidebar-panel">
+                    <h2>Game Controls</h2>
+                    <div class="game-controls">
+                        <button id="new-game-btn" class="control-button" type="button">
+                            New Game
+                        </button>
+                        <button id="undo-btn" class="control-button secondary-button" type="button" disabled>
+                            Undo
+                        </button>
+                        <button id="lobby-btn" class="control-button secondary-button" type="button">
+                            Back to Lobby
+                        </button>
+                    </div>
+                    <p class="empty-message">
+                        New Game and Undo require your opponent's approval.
+                        Undo is available only during your opponent's turn.
+                        Back to Lobby closes the match for both players.
+                    </p>
+                </section>
+
+                <section class="sidebar-panel">
+                    <h2>Notifications</h2>
+                    <div id="game-notifications" class="game-notifications" role="log" aria-live="polite">
+                        <p class="empty-message">No notifications.</p>
+                    </div>
+                </section>
+            </aside>
+        </section>
+
+        <footer class="game-footer">
+            <span>Anarchy Chess</span>
+            <span id="footer-game-status">Initializing game...</span>
+        </footer>
+    </main>
+
+    <!-- Promotion dialog -->
+    <div id="promotion-overlay" class="promotion-overlay" hidden>
+        <section
+            id="promotion-dialog"
+            class="promotion-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="promotion-title"
+            aria-describedby="promotion-description"
+        >
+            <h2 id="promotion-title">Choose Your Promotion</h2>
+            <p id="promotion-description">
+                Select the piece you want to promote to.
+            </p>
+            <div
+                id="promotion-options"
+                class="promotion-options"
+                aria-label="Available promotion pieces"
+            >
+                <!-- JavaScript inserts the available promotion options. -->
+            </div>
+            <p
+                id="promotion-status"
+                class="promotion-status"
+                aria-live="polite"
+            >
+                Choose one of the available pieces.
+            </p>
+        </section>
+    </div>
+
+    <!-- Game result dialog -->
+    <div id="game-result-overlay" class="promotion-overlay" hidden>
+        <section
+            class="promotion-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="game-result-title"
+        >
+            <h2 id="game-result-title">DRAW</h2>
+            <button
+                id="game-result-accept"
+                class="control-button"
+                type="button"
+            >
+                REQUEST NEW GAME
+            </button>
+        </section>
+    </div>
+
+    <!-- Opponent approval dialog for undo/new-game requests -->
+    <div id="action-request-overlay" class="promotion-overlay" hidden>
+        <section
+            class="promotion-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="action-request-title"
+            aria-describedby="action-request-description"
+        >
+            <h2 id="action-request-title">Opponent Request</h2>
+            <p id="action-request-description">
+                Your opponent has requested an action.
+            </p>
+            <div class="action-request-buttons">
+                <button
+                    id="action-request-accept"
+                    class="control-button"
+                    type="button"
+                >
+                    ACCEPT
+                </button>
+                <button
+                    id="action-request-reject"
+                    class="control-button danger-button"
+                    type="button"
+                >
+                    REJECT
+                </button>
+            </div>
+            <p
+                id="action-request-status"
+                class="promotion-status"
+                aria-live="polite"
+            >
+                Choose Accept or Reject.
+            </p>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/game.js') }}" defer></script>
+</body>
+</html>

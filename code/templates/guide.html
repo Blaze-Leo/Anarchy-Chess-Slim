@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1b1b1b">
+    <title>Anarchy Chess | Guide</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+</head>
+<body class="guide-page">
+    <main class="guide-container">
+        <header class="guide-header">
+            <div class="guide-brand">
+                <p class="guide-eyebrow">ANARCHY CHESS</p>
+                <h1>Game Guide</h1>
+                <p class="guide-subtitle">Piece movements, special moves, and rules for this version of Anarchy Chess.</p>
+            </div>
+
+            {% if sid %}
+            <a class="guide-back-button" href="/lobby?sid={{ sid | urlencode }}">
+                <span aria-hidden="true">←</span> Back to Lobby
+            </a>
+            {% else %}
+            <a class="guide-back-button" href="/" title="No active lobby session was supplied; return to the home page.">
+                <span aria-hidden="true">←</span> Back to Home
+            </a>
+            {% endif %}
+        </header>
+
+        <article class="guide-content">
+            {{ guide_html | safe }}
+        </article>
+
+        <footer class="guide-footer">
+            <span>Anarchy Chess</span>
+            {% if sid %}
+            <a class="guide-back-button" href="/lobby?sid={{ sid | urlencode }}">
+                <span aria-hidden="true">←</span> Back to Lobby
+            </a>
+            {% else %}
+            <a class="guide-back-button" href="/">
+                <span aria-hidden="true">←</span> Back to Home
+            </a>
+            {% endif %}
+        </footer>
+    </main>
+</body>
+</html>

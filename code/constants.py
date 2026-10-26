@@ -1,0 +1,42 @@
+# --- Configuration and Constants ---
+
+BOARD_SIZE = 10
+EMPTY = 0
+
+# Piece Type Definitions (as requested)
+KING = 1
+QUEEN = 2
+BISHOP = 3
+ROOK = 4
+HORSE = 5
+CHECKER = 6
+KNOOK = 7
+PAWN = 8
+STERILE_PAWN = 9
+UNDERAGE_PAWN = 10
+ANTIQUEEN = 11
+TRAITORROOK = 12
+
+# --- Promotion Rules ---
+
+PAWN_PROMOTIONS = (
+    ROOK,
+    HORSE,
+    KNOOK,
+    QUEEN,
+    BISHOP,
+    CHECKER,
+)
+
+CHECKER_PROMOTIONS = (
+    CHECKER,
+    KING,
+)
+
+PROMOTION_RANK_WHITE = 0
+PROMOTION_RANK_BLACK = BOARD_SIZE - 1
+
+PROMOTABLE_PAWNS = (
+    PAWN,
+    UNDERAGE_PAWN,
+)

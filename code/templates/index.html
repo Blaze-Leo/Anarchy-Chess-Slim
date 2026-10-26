@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anarchy Chess</title>
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #222;
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .screen {
+            display: none;
+            text-align: center;
+            width: min(90%, 400px);
+        }
+        .active {
+            display: block;
+        }
+        input {
+            box-sizing: border-box;
+            padding: 10px;
+            width: 80%;
+            margin-bottom: 10px;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .player-list {
+            text-align: left;
+            margin-top: 20px;
+            border: 1px solid #444;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #444;
+        }
+        .player-name {
+            overflow-wrap: anywhere;
+        }
+        .player-item button {
+            flex-shrink: 0;
+        }
+        .status {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #aaa;
+            min-height: 1.5em;
+        }
+        #game-status-text {
+            margin: 20px 0;
+        }
+        .lobby-guide-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-sizing: border-box;
+            min-height: 44px;
+            margin: 12px 0 16px;
+            padding: 11px 16px;
+            border: 1px solid #555;
+            border-radius: 6px;
+            background: #4CAF50;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .lobby-guide-button:hover {
+            background: #43a047;
+        }
+
+        .lobby-guide-button:focus-visible {
+            outline: 2px solid #8be99a;
+            outline-offset: 3px;
+        }
+
+        @media (max-width: 480px) {
+            .lobby-guide-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- SCREEN 1: LANDING -->
+    <div id="screen-landing" class="screen">
+        <h1>ANARCHY CHESS</h1>
+        <input
+            type="text"
+            id="username-input"
+            placeholder="Enter Username"
+            maxlength="30"
+            autocomplete="username"
+        >
+        <br>
+        <button id="lobby-btn" onclick="joinLobby()" disabled>
+            LOBBY
+        </button>
+        <div class="status" id="landing-status"></div>
+    </div>
+    <!-- SCREEN 2: LOBBY -->
+    <div id="screen-lobby" class="screen">
+        <h2>Lobby</h2>
+        <a
+            class="lobby-guide-button"
+            href="/guide?sid={{ sid | urlencode }}"
+            rel="noopener noreferrer"
+            aria-label="Open the Anarchy Chess game guide in a new tab"
+        >
+            <span aria-hidden="true"></span>
+            Game Guide
+        </a>
+        <p>Your ID: <span id="my-id"></span></p>
+        <p class="status" id="lobby-status">
+            Connecting to lobby...
+        </p>
+        <div class="player-list" id="player-list"></div>
+    </div>
+    <!-- SCREEN 3: GAME -->
+    <div id="screen-game" class="screen">
+        <h2>Game</h2>
+        <div id="game-status-text">
+            Waiting for connection...
+        </div>
+        <button id="turn-btn" onclick="doTurn" disabled>
+            Do Turn
+        </button>
+        <div class="status" id="action-feedback"></div>
+    </div>
+    <script>
+        // ====================================================
+        // STATE
+        // ====================================================
+        let ws = null;
+        // Values are supplied by FastAPI/Jinja2.
+        let mySessionId = {{ sid | tojson }};
+        let myPublicId = {{ public_id | tojson }};
+        let myMatchId = {{ match_id | tojson }};
+        let currentScreen = "screen-landing";
+        let reconnectTimer = null;
+        let reconnectAttempts = 0;
+        let isGameActive = false;
+        let intentionalNavigation = false;
+        const RECONNECT_BASE_DELAY = 1000;
+        const RECONNECT_MAX_DELAY = 5000;
+        // ====================================================
+        // INITIALIZATION
+        // ====================================================
+        window.addEventListener("DOMContentLoaded", initialize);
+        function initialize() {
+            const usernameInput =
+                document.getElementById("username-input");
+            usernameInput.addEventListener("input", checkInput);
+            document.getElementById("turn-btn").onclick = doTurn;
+            if (mySessionId && myMatchId) {
+                showScreen("screen-game");
+                document.getElementById("game-status-text").textContent =
+                    "Connecting to game...";
+                connectWebSocket();
+            } else if (mySessionId) {
+                showScreen("screen-lobby");
+                document.getElementById("my-id").textContent =
+                    mySessionId;
+                connectWebSocket();
+            } else {
+                showScreen("screen-landing");
+            }
+        }
+        // ====================================================
+        // SCREEN MANAGEMENT
+        // ====================================================
+        function showScreen(screenId) {
+            document.querySelectorAll(".screen").forEach(screen => {
+                screen.classList.remove("active");
+            });
+            document.getElementById(screenId).classList.add("active");
+            currentScreen = screenId;
+        }
+        function setLobbyStatus(message) {
+            document.getElementById("lobby-status").textContent = message;
+        }
+        // ====================================================
+        // LANDING PAGE
+        // ====================================================
+        function checkInput() {
+            const username =
+                document.getElementById("username-input").value.trim();
+            document.getElementById("lobby-btn").disabled =
+                username.length === 0;
+        }
+        async function joinLobby() {
+            const username =
+                document.getElementById("username-input").value.trim();
+            if (!username) {
+                return;
+            }
+            const button = document.getElementById("lobby-btn");
+            const status = document.getElementById("landing-status");
+            button.disabled = true;
+            status.textContent = "Creating session...";
+            try {
+                const response = await fetch("/api/create-session", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        username: username
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(
+                        data.error || "Unable to create session."
+                    );
+                }
+                if (!data.sid) {
+                    throw new Error("The server did not return a session ID.");
+                }
+                // The server creates the session before redirecting.
+                window.location.href =
+                    `/lobby?sid=${encodeURIComponent(data.sid)}`;
+            } catch (error) {
+                status.textContent = error.message;
+                button.disabled = false;
+            }
+        }
+        // ====================================================
+        // WEBSOCKET CONNECTION
+        // ====================================================
+        function getWebSocketURL() {
+            const protocol =
+                window.location.protocol === "https:" ? "wss:" : "ws:";
+            return (
+                `${protocol}//${window.location.host}` +
+                `/ws/${encodeURIComponent(mySessionId)}`
+            );
+        }
+        function connectWebSocket() {
+            if (!mySessionId || intentionalNavigation) {
+                return;
+            }
+            if (
+                ws &&
+                (
+                    ws.readyState === WebSocket.OPEN ||
+                    ws.readyState === WebSocket.CONNECTING
+                )
+            ) {
+                return;
+            }
+            clearTimeout(reconnectTimer);
+            const socket = new WebSocket(getWebSocketURL());
+            ws = socket;
+            socket.onopen = function() {
+                if (ws !== socket) {
+                    return;
+                }
+                reconnectAttempts = 0;
+                if (currentScreen === "screen-lobby") {
+                    setLobbyStatus("Connected to lobby.");
+                    socket.send(JSON.stringify({
+                        type: "JOIN_LOBBY"
+                    }));
+                } else if (currentScreen === "screen-game") {
+                    document.getElementById("game-status-text").textContent =
+                        "Connected. Synchronizing game...";
+                    socket.send(JSON.stringify({
+                        type: "JOIN_GAME",
+                        match_id: myMatchId
+                    }));
+                }
+            };
+            socket.onmessage = function(event) {
+                if (ws !== socket) {
+                    return;
+                }
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (error) {
+                    console.error("Invalid WebSocket message:", error);
+                    return;
+                }
+                handleServerMessage(data);
+            };
+            socket.onerror = function(error) {
+                console.error("WebSocket error:", error);
+                if (currentScreen === "screen-lobby") {
+                    setLobbyStatus("Connection problem. Reconnecting...");
+                }
+            };
+            socket.onclose = function() {
+                // Ignore events belonging to a replaced connection.
+                if (ws !== socket) {
+                    return;
+                }
+                ws = null;
+                if (intentionalNavigation) {
+                    return;
+                }
+                if (currentScreen === "screen-lobby") {
+                    setLobbyStatus("Disconnected. Reconnecting...");
+                }
+                if (currentScreen === "screen-game") {
+                    document.getElementById("game-status-text").textContent =
+                        "Disconnected. Reconnecting...";
+                    updateTurnButton(false);
+                }
+                scheduleReconnect();
+            };
+        }
+        function scheduleReconnect() {
+            if (intentionalNavigation || !mySessionId) {
+                return;
+            }
+            clearTimeout(reconnectTimer);
+            const delay = Math.min(
+                RECONNECT_BASE_DELAY * (2 ** reconnectAttempts),
+                RECONNECT_MAX_DELAY
+            );
+            reconnectAttempts++;
+            reconnectTimer = setTimeout(() => {
+                if (!intentionalNavigation) {
+                    connectWebSocket();
+                }
+            }, delay);
+        }
+        function disconnectWebSocket() {
+            clearTimeout(reconnectTimer);
+            if (ws) {
+                const socket = ws;
+                ws = null;
+                try {
+                    socket.close();
+                } catch (error) {
+                    console.error("Error closing WebSocket:", error);
+                }
+            }
+        }
+        // ====================================================
+        // SERVER MESSAGE HANDLING
+        // ====================================================
+        function handleServerMessage(data) {
+            switch (data.type) {
+                case "LOBBY_READY":
+                    if (currentScreen === "screen-lobby") {
+                        setLobbyStatus("Connected to lobby.");
+                    }
+                    break;
+                case "LOBBY_UPDATE":
+                    if (currentScreen === "screen-lobby") {
+                        renderLobby(data.users || []);
+                    }
+                    break;
+                case "MATCH_REQUEST":
+                    handleMatchRequest(data);
+                    break;
+                case "GAME_START":
+                    intentionalNavigation = true;
+                    if (data.match_id) {
+                        myMatchId = data.match_id;
+                    }
+                    disconnectWebSocket();
+                    window.location.href = data.redirect_url;
+                    break;
+                case "GAME_STATE":
+                    isGameActive = true;
+                    if (data.match_id) {
+                        myMatchId = data.match_id;
+                    }
+                    document.getElementById("game-status-text").textContent =
+                        `Playing against ${data.opponent_username}`;
+                    updateTurnButton(Boolean(data.is_active));
+                    break;
+                case "TURN_RESULT":
+                    handleTurnResult(data);
+                    break;
+                case "GAME_OVER":
+                    isGameActive = false;
+                    updateTurnButton(false);
+                    document.getElementById("action-feedback").textContent =
+                        `Game over: ${data.reason || "The match has ended."}`;
+                    break;
+                case "RETURN_TO_LOBBY":
+                    intentionalNavigation = true;
+                    disconnectWebSocket();
+                    if (data.redirect_url) {
+                        window.location.href = data.redirect_url;
+                    } else {
+                        window.location.href = "/";
+                    }
+                    break;
+                case "INVALID_SESSION":
+                    intentionalNavigation = true;
+                    disconnectWebSocket();
+                    document.body.innerHTML = `
+                        <div style="text-align:center;padding:30px;">
+                            <h1>Invalid Session</h1>
+                            <p>Your session has expired or is no longer valid.</p>
+                            <button onclick="window.location.href='/'">
+                                Return to Home
+                            </button>
+                        </div>
+                    `;
+                    break;
+                default:
+                    console.log("Unhandled server message:", data);
+            }
+        }
+        // ====================================================
+        // LOBBY
+        // ====================================================
+        function renderLobby(users) {
+            const list = document.getElementById("player-list");
+
+            list.replaceChildren();
+
+            if (users.length === 0) {
+                const emptyMessage = document.createElement("p");
+                emptyMessage.textContent = "No players in the lobby.";
+                list.appendChild(emptyMessage);
+                return;
+            }
+
+            for (const user of users) {
+                const row = document.createElement("div");
+                row.className = "player-item";
+
+                const name = document.createElement("span");
+                name.className = "player-name";
+                name.textContent = user.username;
+
+                row.appendChild(name);
+
+                if (user.public_id !== myPublicId) {
+                    const button = document.createElement("button");
+                    button.textContent = "Challenge";
+
+                    button.addEventListener("click", () => {
+                        challenge(user.public_id);
+                    });
+
+                    row.appendChild(button);
+                } else {
+                    const label = document.createElement("span");
+                    label.textContent = "You";
+                    row.appendChild(label);
+                }
+
+                list.appendChild(row);
+            }
+        }
+        function challenge(targetPublicId) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("Not connected to the lobby.");
+                return;
+            }
+
+            if (targetPublicId === myPublicId) {
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: "CHALLENGE",
+                target_public_id: targetPublicId
+            }));
+        }
+
+        function handleMatchRequest(data) {
+            const accepted = confirm(
+                `${data.from_username} wants to play! Accept?`
+            );
+            if (!accepted) {
+                return;
+            }
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("Connection lost. Please reconnect and try again.");
+                return;
+            }
+            ws.send(JSON.stringify({
+                type: "ACCEPT_CHALLENGE",
+                challenger_public_id: data.from_public_id
+            }));
+        }
+        // ====================================================
+        // GAME
+        // ====================================================
+        function updateTurnButton(isActive) {
+            const button = document.getElementById("turn-btn");
+            button.disabled = !isActive;
+            button.textContent = isActive ? "Do Turn" : "Waiting for turn...";
+        }
+        function doTurn() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                document.getElementById("action-feedback").textContent =
+                    "Not connected. Reconnecting...";
+                return;
+            }
+            if (!myMatchId) {
+                return;
+            }
+            ws.send(JSON.stringify({
+                type: "DO_TURN",
+                match_id: myMatchId
+            }));
+        }
+        function handleTurnResult(data) {
+            document.getElementById("action-feedback").textContent =
+                data.message || "";
+            if (!data.success) {
+                return;
+            }
+            if (data.message === "Doing something") {
+                // We just used our turn.
+                updateTurnButton(false);
+            } else if (data.message === "Opponent did something") {
+                // The opponent used their turn, so it is now ours.
+                updateTurnButton(true);
+            }
+        }
+        // ====================================================
+        // NAVIGATION / CLEANUP
+        // ====================================================
+        window.addEventListener("beforeunload", function() {
+            // This closes the local connection only.
+            // The server keeps the lobby session for 60 seconds.
+            clearTimeout(reconnectTimer);
+            if (ws) {
+                try {
+                    ws.close();
+                } catch (error) {
+                // The browser may already have closed the socket.
+                }
+            }
+        });
+    </script>
+</body>
+</html>

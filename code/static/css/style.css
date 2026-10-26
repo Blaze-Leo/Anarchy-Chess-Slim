@@ -1,0 +1,1194 @@
+/* =========================================================
+   1. GLOBAL STYLES
+   ========================================================= */
+:root {
+    --background: #1b1b1b;
+    --surface: #252525;
+    --surface-hover: #303030;
+    --border: #414141;
+    --text-primary: #eeeeee;
+    --text-secondary: #aaaaaa;
+    --accent: #4caf50;
+    --accent-hover: #43a047;
+    --danger: #c62828;
+    --danger-hover: #a91f1f;
+    --board-light: #e8d5b5;
+    --board-dark: #9c7653;
+    --board-highlight: rgba(255, 235, 59, 0.55);
+    --board-legal-move: rgba(76, 175, 80, 0.65);
+    --radius: 8px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    min-height: 100%;
+    background: var(--background);
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    font-family:
+        "Segoe UI",
+        Arial,
+        sans-serif;
+    background: var(--background);
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+button {
+    font: inherit;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+#game-container {
+    width: min(1400px, 100%);
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* =========================================================
+   2. HEADER
+   ========================================================= */
+.game-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 22px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.brand h1 {
+    margin: 0;
+    font-size: 1.7rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+.brand p {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #888888;
+    flex-shrink: 0;
+}
+
+.status-indicator.connected {
+    background: var(--accent);
+}
+
+.status-indicator.disconnected {
+    background: var(--danger);
+}
+
+/* =========================================================
+   3. GAME INFORMATION
+   ========================================================= */
+.game-information {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.player-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.game-information > .player-card {
+    flex: 1;
+}
+
+.player-piece {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    font-size: 2rem;
+}
+
+.player-details {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.player-color {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+}
+
+.player-details strong {
+    overflow-wrap: anywhere;
+    font-size: 0.95rem;
+}
+
+.match-information {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 110px;
+    padding: 12px 16px;
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.match-label {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    letter-spacing: 1.5px;
+}
+
+#match-id {
+    overflow-wrap: anywhere;
+    font-size: 0.85rem;
+}
+
+.turn-indicator {
+    width: 9px;
+    height: 9px;
+    margin-left: auto;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: transparent;
+}
+
+.turn-indicator.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+}
+
+/* =========================================================
+   4. MAIN GAME LAYOUT
+   ========================================================= */
+.game-layout {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(300px, 360px);
+    align-items: start;
+    gap: 24px;
+}
+
+.board-section {
+    min-width: 0;
+}
+
+.board-wrapper {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 8px;
+    background: #141414;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+/* =========================================================
+   5. CHESSBOARD
+   ========================================================= */
+.chessboard {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    grid-template-rows: repeat(10, minmax(0, 1fr));
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: 3px;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.chess-square {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    aspect-ratio: 1 / 1;
+    cursor: pointer;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.chess-square.light {
+    background: var(--board-light);
+}
+
+.chess-square.dark {
+    background: var(--board-dark);
+}
+
+.chess-square:hover {
+    filter: brightness(1.08);
+}
+
+.chess-square:focus-visible {
+    z-index: 2;
+    outline: 3px solid #ffffff;
+    outline-offset: -4px;
+}
+
+/* Selected square: light green border. */
+.chess-square.selected {
+    z-index: 2;
+    background: var(--board-highlight);
+    box-shadow: inset 0 0 0 4px #8be99a;
+}
+
+/* =========================================================
+   DYNAMIC MOVEMENT OVERLAYS
+   ========================================================= */
+/* Coloured border drawn using a colour supplied by the server. */
+.movement-square-overlay {
+    position: absolute;
+    z-index: 2;
+    inset: 3%;
+    border: 3px solid var(--movement-colour);
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+/* Coloured dot drawn using a colour supplied by the server. */
+.movement-dot-overlay {
+    position: absolute;
+    z-index: 1;
+    width: 20%;
+    height: 20%;
+    border-radius: 50%;
+    background: var(--movement-colour);
+    pointer-events: none;
+}
+
+/* =========================================================
+   LAST SUCCESSFUL MOVE
+   ========================================================= */
+.last-turn-highlight {
+    position: absolute;
+    z-index: 3;
+    inset: 3%;
+    border: 4px solid #ffeb3b;
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+.chess-piece {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-family:
+        "Segoe UI Symbol",
+        "DejaVu Sans",
+        "Arial Unicode MS",
+        serif;
+    font-size: clamp(1.2rem, 6.2vw, 4.4rem);
+    line-height: 1;
+    pointer-events: none;
+}
+
+.chess-piece-image {
+    display: block;
+    width: 76%;
+    height: 76%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.piece-fallback {
+    position: relative;
+    z-index: 1;
+    font-size: clamp(0.7rem, 3vw, 1.5rem);
+    font-weight: 800;
+    pointer-events: none;
+}
+
+.chess-square {
+    overflow: hidden;
+}
+
+.chess-piece.white-piece {
+    color: #fffdf4;
+    text-shadow:
+        -1px -1px 0 #333333,
+         1px -1px 0 #333333,
+        -1px  1px 0 #333333,
+         1px  1px 0 #333333,
+         0 2px 2px rgba(0, 0, 0, 0.4);
+}
+
+.chess-piece.black-piece {
+    color: #191919;
+    text-shadow:
+        0 1px 1px rgba(255, 255, 255, 0.25);
+}
+
+.square-coordinate {
+    position: absolute;
+    z-index: 2;
+    font-size: clamp(0.5rem, 1.1vw, 0.75rem);
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.square-coordinate.rank {
+    top: 2px;
+    left: 4px;
+}
+
+.square-coordinate.file {
+    right: 4px;
+    bottom: 1px;
+}
+
+.chess-square.light .square-coordinate {
+    color: #705438;
+}
+
+.chess-square.dark .square-coordinate {
+    color: #f4e5ce;
+}
+
+/* =========================================================
+   6. WHITE PLAYER CARD AND GAME STATUS
+   ========================================================= */
+.white-player {
+    margin-top: 14px;
+}
+
+.game-status {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    margin-top: 14px;
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-wrap: anywhere;
+}
+
+.game-status.check {
+    color: #ffcc80;
+}
+
+.game-status.game-over {
+    color: #a5d6a7;
+}
+
+/* =========================================================
+   7. SIDEBAR
+   ========================================================= */
+.game-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+}
+
+.sidebar-panel {
+    padding: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.sidebar-panel h2 {
+    margin: 0 0 16px;
+    padding-bottom: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+}
+
+/* =========================================================
+   8. MOVE HISTORY
+   ========================================================= */
+.move-history {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+    min-height: 90px;
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.move-history-row {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding: 9px 8px;
+    border-radius: 4px;
+    /* Allow normal word wrapping across the full row. */
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+    line-height: 1.6;
+}
+
+.move-history-row:nth-child(even) {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.move-number {
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.move-white,
+.move-black {
+    min-width: 0;
+    font-weight: 600;
+    /* Prevent notation from breaking into individual characters. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.move-history-row.latest-move {
+    background: rgba(76, 175, 80, 0.12);
+}
+
+.empty-message {
+    margin: 8px 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* =========================================================
+   9. GAME CONTROLS
+   ========================================================= */
+.game-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.control-button {
+    width: 100%;
+    min-height: 44px;
+    padding: 11px 14px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.control-button:not(:disabled):hover {
+    background: var(--accent-hover);
+}
+
+.control-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.danger-button {
+    background: var(--danger);
+}
+
+.danger-button:not(:disabled):hover {
+    background: var(--danger-hover);
+}
+
+.secondary-button {
+    background: #414141;
+    border-color: #555555;
+}
+
+.secondary-button:not(:disabled):hover {
+    background: #505050;
+}
+
+/* =========================================================
+   10. NOTIFICATIONS
+   ========================================================= */
+.game-notifications {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    padding: 10px;
+    background: #303030;
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+.notification-item.error {
+    border-left-color: var(--danger);
+}
+
+.notification-item.warning {
+    border-left-color: #ffb74d;
+}
+
+/* =========================================================
+   11. FOOTER
+   ========================================================= */
+.game-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+#footer-game-status {
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   12. RESPONSIVE LAYOUT
+   ========================================================= */
+@media (min-width: 1100px) {
+    .chess-piece {
+        font-size: clamp(2.5rem, 4.2vw, 4.4rem);
+    }
+}
+
+@media (max-width: 900px) {
+    #game-container {
+        padding: 18px;
+    }
+
+    .game-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .board-wrapper {
+        max-width: 650px;
+    }
+
+    .game-sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+}
+
+@media (max-width: 560px) {
+    #game-container {
+        padding: 12px;
+    }
+
+    .game-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .brand h1 {
+        font-size: 1.4rem;
+    }
+
+    .game-information {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .game-information > .player-card {
+        order: 1;
+    }
+
+    .match-information {
+        order: 0;
+        align-items: center;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        padding: 10px 14px;
+    }
+
+    .board-wrapper {
+        padding: 4px;
+    }
+
+    .chess-piece {
+        font-size: clamp(1.5rem, 9vw, 3rem);
+    }
+
+    .game-sidebar {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar-panel {
+        padding: 14px;
+    }
+
+    .game-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    #footer-game-status {
+        text-align: left;
+    }
+}
+
+/* =========================================================
+   13. REDUCED MOTION
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+/* =========================================================
+   PROMOTION DIALOG
+   ========================================================= */
+.promotion-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(4px);
+}
+
+.promotion-overlay[hidden] {
+    display: none;
+}
+
+.promotion-dialog {
+    width: min(560px, 100%);
+    max-height: min(85vh, 700px);
+    overflow-y: auto;
+    padding: 28px;
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.5);
+}
+
+.promotion-dialog h2 {
+    margin: 0 0 8px;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.promotion-dialog > p {
+    margin: 0 0 22px;
+    color: var(--text-secondary);
+}
+
+.promotion-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.promotion-option-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 125px;
+    padding: 14px 8px;
+    color: var(--text-primary);
+    background: #303030;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.15s ease;
+}
+
+.promotion-option-button:not(:disabled):hover {
+    background: #3b3b3b;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.promotion-option-button:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.promotion-option-button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.promotion-piece-image {
+    display: block;
+    width: 64px;
+    height: 64px;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.promotion-image-unavailable {
+    visibility: hidden;
+}
+
+.promotion-piece-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.promotion-status {
+    min-height: 24px;
+    margin: 18px 0 0 !important;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+    .promotion-dialog {
+        padding: 20px 14px;
+    }
+
+    .promotion-options {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .promotion-option-button {
+        min-height: 110px;
+    }
+
+    .promotion-piece-image {
+        width: 54px;
+        height: 54px;
+    }
+}
+
+/* Opponent approval request dialog */
+.action-request-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.action-request-buttons .control-button {
+    width: 100%;
+}
+
+@media (max-width: 480px) {
+    .action-request-buttons {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+}
+
+/* =========================================================
+   14. MARKDOWN GUIDE PAGE
+   ========================================================= */
+.guide-page {
+    background: var(--background);
+}
+
+.guide-container {
+    width: min(1080px, 100%);
+    margin: 0 auto;
+    padding: 28px 24px 36px;
+}
+
+.guide-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.guide-brand {
+    min-width: 0;
+}
+
+.guide-eyebrow {
+    margin: 0 0 6px;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+.guide-brand h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    line-height: 1.15;
+    letter-spacing: 0.3px;
+}
+
+.guide-subtitle {
+    margin: 10px 0 0;
+    color: var(--text-secondary);
+}
+
+.guide-back-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 10px 15px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.guide-back-button:hover {
+    background: var(--accent-hover);
+}
+
+.guide-back-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.guide-content {
+    min-width: 0;
+    padding: clamp(20px, 4vw, 42px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-wrap: anywhere;
+}
+
+.guide-content > :first-child {
+    margin-top: 0;
+}
+
+.guide-content > :last-child {
+    margin-bottom: 0;
+}
+
+.guide-content h1,
+.guide-content h2,
+.guide-content h3,
+.guide-content h4 {
+    color: var(--text-primary);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.guide-content h1 {
+    margin: 0 0 1.2rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    font-size: clamp(1.7rem, 3.4vw, 2.25rem);
+}
+
+.guide-content h2 {
+    margin: 2.2rem 0 1rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--border);
+    font-size: clamp(1.35rem, 2.7vw, 1.7rem);
+}
+
+.guide-content h3 {
+    margin: 1.6rem 0 0.65rem;
+    font-size: 1.2rem;
+}
+
+.guide-content h4 {
+    margin: 1.35rem 0 0.5rem;
+    font-size: 1.05rem;
+}
+
+.guide-content p,
+.guide-content li {
+    color: var(--text-primary);
+    line-height: 1.75;
+}
+
+.guide-content p {
+    margin: 0.7rem 0 1rem;
+}
+
+.guide-content ul,
+.guide-content ol {
+    padding-left: 1.6rem;
+    margin: 0.65rem 0 1.2rem;
+}
+
+.guide-content li {
+    padding-left: 0.15rem;
+    margin: 0.35rem 0;
+}
+
+.guide-content li::marker {
+    color: var(--accent);
+}
+
+.guide-content a {
+    color: #8bd995;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.guide-content a:hover {
+    color: #b7f0bd;
+}
+
+.guide-content strong {
+    color: #ffffff;
+}
+
+.guide-content hr {
+    height: 1px;
+    margin: 2rem 0;
+    border: 0;
+    background: var(--border);
+}
+
+.guide-content blockquote {
+    margin: 1.2rem 0;
+    padding: 0.7rem 1rem;
+    border-left: 4px solid var(--accent);
+    border-radius: 0 5px 5px 0;
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--text-secondary);
+}
+
+.guide-content blockquote > :first-child {
+    margin-top: 0;
+}
+
+.guide-content blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+.guide-content code {
+    padding: 0.12rem 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #191919;
+    color: #d6f5d9;
+    font-family: Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+}
+
+.guide-content pre {
+    max-width: 100%;
+    margin: 1.1rem 0;
+    padding: 16px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #171717;
+}
+
+.guide-content pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: normal;
+}
+
+.guide-content table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 1.2rem 0;
+    overflow-x: auto;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.guide-content th,
+.guide-content td {
+    min-width: 110px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.guide-content th {
+    background: #303030;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.guide-content tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.guide-content img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1rem auto;
+    border-radius: 5px;
+}
+
+.guide-content input,
+.guide-content iframe,
+.guide-content video {
+    max-width: 100%;
+}
+
+.guide-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 680px) {
+    .guide-container {
+        padding: 16px 12px 24px;
+    }
+
+    .guide-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .guide-back-button {
+        width: 100%;
+    }
+
+    .guide-content {
+        padding: 20px 16px;
+    }
+
+    .guide-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
+/* =========================================================
+   15. LOBBY GUIDE BUTTON
+   ========================================================= */
+.lobby-guide-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 44px;
+    margin: 12px 0;
+    padding: 11px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lobby-guide-button:hover {
+    background: var(--accent-hover);
+}
+
+.lobby-guide-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+    .lobby-guide-button {
+        width: 100%;
+    }
+}
