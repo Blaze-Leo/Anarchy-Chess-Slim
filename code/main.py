@@ -46,6 +46,7 @@ class Player:
         self.active_match_id: Optional[str] = None
         self.expiry_task: Optional[asyncio.Task] = None
         self.connection_generation = 0
+        self.is_navigating = False
 
 class Match:
     """One game between two players, with its own action lock."""

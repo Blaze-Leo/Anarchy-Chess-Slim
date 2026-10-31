@@ -401,6 +401,9 @@
             return;
         }
         intentionalNavigation = true;
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            sendMessage({ type: "NAVIGATING_AWAY" });
+        }
         disconnectWebSocket();
         window.location.href = url;
     }
