@@ -1,7 +1,9 @@
 # Disclamier
 
 Kind of a fork of `https://github.com/slomg/anarchychess`
+
 Some rules shown in the original guide are not implemented yet. This is just a slim version of the actual project. This completely written in python and javascript and runs on localhost. There is no bot for this game and features a lobby like view instead aimed for local gaming between people. 
+
 There might be some insecurities in the web view and thus not approved for deploying the code. Nevertheless its available on render to be played at `https://anarchy-chess-slim.onrender.com`. 
 
 # Anarchy Chess
