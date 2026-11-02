@@ -10,6 +10,24 @@
     const RECONNECT_BASE_DELAY = 1000;
     const RECONNECT_MAX_DELAY = 5000;
     const FILES = "ABCDEFGHIJ";
+// Colour the server uses for the active side's own (movable) destinations.
+    const MOVABLE_COLOUR = "#e53935";
+// How each piece moves, keyed by absolute piece code (see constants.py).
+// Shown to the player whenever they select a piece of either colour.
+    const PIECE_MOVEMENT_INFO = {
+        1: "King: moves one square in any direction; may castle toward a corner Rook on its starting square (every square between them must be empty).",
+        2: "Queen: slides any distance orthogonally or diagonally; can tunnel-swap with a friendly Antiqueen, or decay into a Sterile Pawn + Rook + Horse.",
+        3: "Bishop: slides diagonally, reflecting off board edges like a light ray; stops at the first piece it meets and may capture it (an enemy, or any Underage Pawn).",
+        4: "Rook: slides orthogonally; can Knooklear-Fuse with a friendly Horse.",
+        5: "Horse: knight move; can Knooklear-Fuse with a friendly Rook.",
+        6: "Checker: 1 square diagonally to an empty square, or 2 squares diagonally if the intervening square is empty; may hop over a consecutive run of enemy pieces (capturing them) onto the empty square beyond, and hops can chain.",
+        7: "Knook: knight move, or 1-2 squares orthogonally without jumping.",
+        8: "Pawn: 1 square forward; from its starting row it may advance up to 3 squares; captures diagonally forward.",
+        9: "Sterile Pawn: same as a Pawn, but has no multi-square first move.",
+        10: "Underage Pawn: same as a Pawn, but its first move is up to 2 squares.",
+        11: "Antiqueen: knight move; can tunnel-swap with a friendly Queen.",
+        12: "Traitor Rook: slides orthogonally for whichever side has more pieces in the 8 surrounding squares (other Traitor Rooks don't count); if tied or the opponent leads it is immobile. Allegiance is re-evaluated every turn."
+    };
     const root = document.getElementById("game-container");
     const boardElement = document.getElementById("chessboard");
     if (!root || !boardElement) {
@@ -64,6 +82,8 @@
         document.getElementById("connection-text");
     const gameStatus =
         document.getElementById("game-status");
+    const pieceMovementInfo =
+        document.getElementById("piece-movement-info");
     const footerStatus =
         document.getElementById("footer-game-status");
     const moveHistory =
@@ -694,6 +714,7 @@
         selectedPosition = null;
         movementTargets.clear();
         movementOverlays = { square: {}, dot: {} };
+        setPieceMovementInfo(EMPTY);
         renderBoard();
         setGameStatus("Choose a piece to complete your promotion.");
         const firstOption = promotionOptionsElement.querySelector("button");
@@ -829,6 +850,7 @@ row =>
             square: {},
             dot: {}
         };
+        setPieceMovementInfo(EMPTY);
         updatePlayerNames(message);
         renderBoard();
         renderHistory(message.history || []);
@@ -1054,6 +1076,7 @@ row =>
                 dot: {}
             };
             renderBoard();
+            setPieceMovementInfo(EMPTY);
             setGameStatus(
                 canMove
                     ? "Selection cleared. Select a piece."
@@ -1069,6 +1092,7 @@ row =>
             dot: {}
         };
         renderBoard();
+        setPieceMovementInfo(board[row][col]);
 // Ask the server to query the engine.
         const sent = sendMessage({
             type: "SHOW_MOVEMENT",
@@ -1113,6 +1137,7 @@ row =>
             setGameStatus("No movement destinations were returned.");
             return;
         }
+        let cosmeticCount = 0;
         for (const overlayType of ["square", "dot"]) {
             const colourGroups = moves[overlayType];
             if (
@@ -1127,6 +1152,7 @@ row =>
                     continue;
                 }
 // Retain the server-provided colour for rendering.
+                const isMovable = colour === MOVABLE_COLOUR;
                 movementOverlays[overlayType][colour] = [];
                 for (const position of positions) {
                     if (
@@ -1142,24 +1168,34 @@ row =>
                         continue;
                     }
                     movementOverlays[overlayType][colour].push(position);
-                    movementTargets.add(
-                        positionKey(position[0], position[1])
-                    );
+// Only movable (red) destinations are clickable targets. Cosmetic
+// opponent moves (blue) are shown but cannot be used to move.
+                    if (isMovable) {
+                        movementTargets.add(
+                            positionKey(position[0], position[1])
+                        );
+                    } else {
+                        cosmeticCount++;
+                    }
                 }
             }
         }
         renderBoard();
-        if (movementTargets.size === 0) {
-            setGameStatus(
-                "This square has no available destinations."
-            );
-        } else if (canMove) {
+        if (movementTargets.size > 0 && canMove) {
             setGameStatus(
                 "Select a highlighted destination to move."
             );
-        } else {
+        } else if (movementTargets.size > 0) {
             setGameStatus(
                 "Destinations shown. Wait for your turn before moving."
+            );
+        } else if (cosmeticCount > 0) {
+            setGameStatus(
+                "Opponent's piece: its moves are shown for reference only."
+            );
+        } else {
+            setGameStatus(
+                "This square has no available destinations."
             );
         }
     }
@@ -1224,6 +1260,18 @@ row =>
     function setGameStatus(message) {
         gameStatus.textContent = message;
         footerStatus.textContent = message;
+    }
+    // Show how the selected piece moves (either colour). Blank for an
+    // empty square or when nothing is selected.
+    function setPieceMovementInfo(pieceValue) {
+        if (!pieceMovementInfo) {
+            return;
+        }
+        const text =
+            pieceValue === EMPTY
+                ? ""
+                : PIECE_MOVEMENT_INFO[Math.abs(pieceValue)] || "";
+        pieceMovementInfo.textContent = text;
     }
     function setConnectionStatus(connected, message) {
         connectionText.textContent = message;

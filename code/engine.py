@@ -13,6 +13,10 @@ from constants import *
 from go_where import *
 Position = Tuple[int, int]
 _games: Dict[str, dict] = {}
+# Overlay colours: red for the active side's own (movable) moves, blue for
+# opponent moves shown purely as a cosmetic reference.
+MOVABLE_COLOUR = "#e53935"
+OPPOSING_COLOUR = "#1e88e5"
 class MovementCache:
     """Cache movement-generation results for one match."""
     def __init__(self):
@@ -201,6 +205,9 @@ def create_game(
         "en_passant_pawn_position": None,
         # Independent movement cache for this match.
         "movement_cache": MovementCache(),
+        # Second cache holding the opposite side's moves, used only for the
+        # cosmetic opponent-movement overlay (never for move execution).
+        "opponent_movement_cache": MovementCache(),
         # History contains successful moves only.
         "history": [],
     }
@@ -301,16 +308,18 @@ def restore_game_state(match_id: str, snapshot: dict) -> bool:
     game["en_passant_pawn_position"] = normalized_en_passant
     game["history"] = list(history)
     game["movement_cache"] = MovementCache()
+    game["opponent_movement_cache"] = MovementCache()
     return True
     # ---------------------------------------------------------------------------
     # Movement generation
     # ---------------------------------------------------------------------------
-def _generate_moves(
+def _generate_moves_for_side(
     match_id: str,
     position,
-    player_colour: str,
+    side_is_white: bool,
+    cache: MovementCache,
 ):
-    """Generate available moves using the match-specific movement cache.
+    """Generate available moves for one side using the given movement cache.
     Each move has the form:
         (
             (destination_row, destination_col),
@@ -318,8 +327,6 @@ def _generate_moves(
         )
     """
     game = _get_game(match_id)
-    if player_colour not in ("white", "black"):
-        return []
     source = _normalize_position(position)
     if source is None:
         return []
@@ -331,25 +338,85 @@ def _generate_moves(
     piece = board[row][col]
     if piece == EMPTY:
         return []
-    current_side_is_white = player_colour == "white"
-    # Ordinary pieces must belong to the requesting player.
+    # Ordinary pieces must belong to the side being queried.
     # Traitor Rooks use their special control rules in go_where.py.
     if abs(piece) != TRAITORROOK:
-        if current_side_is_white and piece < 0:
+        if side_is_white and piece < 0:
             return []
-        if not current_side_is_white and piece > 0:
+        if not side_is_white and piece > 0:
             return []
-            # Retrieve or calculate the movement cache for this match.
-    all_movements = game["movement_cache"].get(
+    # Retrieve or calculate the movement cache for this match.
+    all_movements = cache.get(
         board,
         en_passant_pawn_position=game["en_passant_pawn_position"],
-        current_side_is_white=current_side_is_white,
+        current_side_is_white=side_is_white,
     )
     result = all_movements[row][col]
     if result is None:
         return []
     moves, _forced = result
     return moves
+
+def _generate_moves(
+    match_id: str,
+    position,
+    player_colour: str,
+):
+    """Generate the active side's available moves (used by do_movement)."""
+    if player_colour not in ("white", "black"):
+        return []
+    game = _get_game(match_id)
+    return _generate_moves_for_side(
+        match_id,
+        position,
+        side_is_white=player_colour == "white",
+        cache=game["movement_cache"],
+    )
+
+def _opponent_moves(
+    match_id: str,
+    position,
+    active_player_colour: str,
+):
+    """Generate the opposite side's available moves (display only)."""
+    if active_player_colour not in ("white", "black"):
+        return []
+    game = _get_game(match_id)
+    return _generate_moves_for_side(
+        match_id,
+        position,
+        side_is_white=active_player_colour == "black",
+        cache=game["opponent_movement_cache"],
+    )
+def _build_overlay(
+    moves,
+    board: List[List[int]],
+    colour: str,
+) -> Dict[str, List[List[int]]]:
+    """Build the square/dot overlay for a list of moves in one colour."""
+    result = {
+        "square": {},
+        "dot": {},
+    }
+    square_positions = []
+    dot_positions = []
+    for destination, captured_positions in moves:
+        row, col = destination
+        destination_square = [row, col]
+        # Captures use a solid square, even when the destination is empty.
+        # This is needed for En Passant and other special captures.
+        if captured_positions or board[row][col] != EMPTY:
+            if destination_square not in square_positions:
+                square_positions.append(destination_square)
+        else:
+            if destination_square not in dot_positions:
+                dot_positions.append(destination_square)
+    if square_positions:
+        result["square"][colour] = square_positions
+    if dot_positions:
+        result["dot"][colour] = dot_positions
+    return result
+
 def show_movement(
     match_id: str,
     position,
@@ -358,6 +425,9 @@ def show_movement(
     """Return movement overlays in the format expected by main.py.
     A destination with a capture is shown as a square.
     A destination without a capture is shown as a dot.
+    The active side's own moves use MOVABLE_COLOUR (red). When the selected
+    piece belongs to the opponent, its moves are shown in OPPOSING_COLOUR
+    (blue) purely for display and cannot be used to move.
     The frontend overlay format is:
         {
             "square": {"#e53935": [[row, col], ...]},
@@ -368,33 +438,19 @@ def show_movement(
         "square": {},
         "dot": {},
     }
-    moves = _generate_moves(
-        match_id,
-        position,
-        player_colour,
-    )
-    if not moves:
-        return result
     game = _get_game(match_id)
     board = game["board"]
-    square_positions = []
-    dot_positions = []
-    for destination, captured_positions in moves:
-        row, col = destination
-        destination_square = [row, col]
-        # Captures use a red square, even when the destination is empty.
-        # This is needed for En Passant and other special captures.
-        if captured_positions or board[row][col] != EMPTY:
-            if destination_square not in square_positions:
-                square_positions.append(destination_square)
-        else:
-            if destination_square not in dot_positions:
-                dot_positions.append(destination_square)
-    colour = "#e53935"
-    if square_positions:
-        result["square"][colour] = square_positions
-    if dot_positions:
-        result["dot"][colour] = dot_positions
+    main_moves = _generate_moves(match_id, position, player_colour)
+    if main_moves:
+        overlay = _build_overlay(main_moves, board, MOVABLE_COLOUR)
+    else:
+        overlay = _build_overlay(
+            _opponent_moves(match_id, position, player_colour),
+            board,
+            OPPOSING_COLOUR,
+        )
+    result["square"].update(overlay["square"])
+    result["dot"].update(overlay["dot"])
     return result
     # ---------------------------------------------------------------------------
     # Queentum Tunnel
@@ -463,9 +519,8 @@ def _handle_castling(
     captured_positions: List[Position],
 ) -> bool:
     """Execute castling by moving both the King and its Rook.
-    Captured positions are processed as part of the same move. This supports
-    go_where.py's castling rule that permits a friendly Bishop to be captured
-    on a castling landing square.
+    Castling is only allowed when every square between them is empty, so it
+    never captures pieces (captured_positions is always empty for castling).
     Returns True if castling succeeds, otherwise False.
     """
     source_row, source_col = source
@@ -490,17 +545,10 @@ def _handle_castling(
     # Validate the Rook before changing any squares.
     if abs(rook_piece) != ROOK:
         return False
-        # The castling Rook must belong to the same side as the King.
+    # The castling Rook must belong to the same side as the King.
     if (rook_piece > 0) != (king_piece > 0):
         return False
-        # Capturing the King or castling Rook's source is never allowed.
-    if source in captured_positions or rook_source in captured_positions:
-        return False
-        # Remove any pieces captured on the landing squares, such as friendly
-        # Bishops permitted by the rules in go_where.py.
-    for captured_row, captured_col in captured_positions:
-        board[captured_row][captured_col] = EMPTY
-        # Clear both starting squares.
+    # Clear both starting squares.
     board[source_row][source_col] = EMPTY
     board[rook_source_row][rook_source_col] = EMPTY
     # Place the King and Rook on their castling destinations.
@@ -735,9 +783,10 @@ def do_movement(
     else:
         game["en_passant_pawn_position"] = None
         # --------------------------------------------------------
-        # Invalidate this match's movement cache
+        # Invalidate this match's movement caches
         # --------------------------------------------------------
     game["movement_cache"].invalidate()
+    game["opponent_movement_cache"].invalidate()
     # Record one concise history entry.
     if queen_beta_decay_handled:
         game["history"].append(f"Queen Beta Decay at {source}")
@@ -773,12 +822,13 @@ def promote_piece(match_id, position, promoted_piece):
         # Replace the original piece with the chosen piece.
     board[row][col] = promoted_piece
     # Clear or invalidate cached movement options.
-    movement_cache = game.get("movement_cache")
-    if movement_cache is not None:
-        if hasattr(movement_cache, "invalidate"):
-            movement_cache.invalidate()
-        elif hasattr(movement_cache, "clear"):
-            movement_cache.clear()
+    for cache_key in ("movement_cache", "opponent_movement_cache"):
+        movement_cache = game.get(cache_key)
+        if movement_cache is not None:
+            if hasattr(movement_cache, "invalidate"):
+                movement_cache.invalidate()
+            elif hasattr(movement_cache, "clear"):
+                movement_cache.clear()
             # Record the promotion in the game history.
     game.setdefault("history", []).append(
         f"Piece {current_piece} promoted to {promoted_piece} " f"at ({row}, {col})."

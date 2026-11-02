@@ -61,7 +61,7 @@ Anarchy-Chess/
    - Maintains en-passant state, a per-match `MovementCache` (invalidated on every board change, pre-warmed for the next player), and move history.
    - `do_movement` validates a requested destination against generated moves, then executes it, dispatching special-move effects:
      - **Queentum Tunnelling** (Queen/Antiqueen swap),
-     - **Castling** (king two squares toward a corner rook; may capture a friendly bishop on the landing square),
+     - **Castling** (king two squares toward a corner rook; every square between them must be empty, so nothing is captured),
      - **Il Vaticano** (two friendly bishops swap, capturing the two enemy pieces between them),
      - **Queen Beta Decay** (Queen replaced by Sterile Pawn + Rook + Horse on adjacent squares).
    - Knooklear Fusion is detected in `main.py` (Rook/Horse moving onto a friendly counterpart) and finished with `promote_piece`, which places the resulting Knook after the engine has cleared the 3x3 explosion capture list.

@@ -423,6 +423,23 @@ button:focus-visible {
     color: #a5d6a7;
 }
 
+.piece-movement-info {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-wrap: anywhere;
+}
+
+.piece-movement-info:empty {
+    opacity: 0.55;
+}
+
 /* =========================================================
    7. SIDEBAR
    ========================================================= */

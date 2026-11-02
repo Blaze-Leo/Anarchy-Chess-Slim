@@ -6,8 +6,8 @@ The capture list contains board positions, not piece codes. The Boolean
 ``forced`` is True when a mandatory rule filters the options (Forced En Passant
 or a Bishop's mandatory Underage Pawn capture).
 A move may capture friendly pieces when a custom rule explicitly says so
-(currently bouncing Bishops capturing Underage Pawns and castling over a friendly
-Bishop). This module generates candidate moves only. It does not mutate the
+(currently bouncing Bishops capturing Underage Pawns). This module generates
+candidate moves only. It does not mutate the
 board or perform action effects such as swapping Queentum pieces, moving a
 castling rook, triggering Knooklear Fusion, ending the game, or promotion.
 """
@@ -434,7 +434,8 @@ def _traitorrook_adjacent_counts(row: int, col: int, board: Board) -> Tuple[int,
 
 
 def _castling_moves(row: int, col: int, board: Board, mover_is_white: bool) -> MoveList:
-    """Return king destinations and friendly Bishops captured on landing squares."""
+    """Return castling destinations when every square between the King and Rook
+    is empty. Castling never captures pieces."""
 
     if mover_is_white:
         king_start = (BOARD_SIZE - 1, 5)
@@ -448,11 +449,6 @@ def _castling_moves(row: int, col: int, board: Board, mover_is_white: bool) -> M
     if abs(king_value) != KING or (king_value > 0) != mover_is_white:
         return []
 
-    def landing_allowed(value: int) -> bool:
-        return value == EMPTY or (
-            abs(value) == BISHOP and (value > 0) == mover_is_white
-        )
-
     moves: MoveList = []
     for rook_row, rook_col in rook_starts:
         rook_value = board[rook_row][rook_col]
@@ -463,29 +459,14 @@ def _castling_moves(row: int, col: int, board: Board, mover_is_white: bool) -> M
         rook_dest = (row, col + direction)
         if not _in_bounds(*king_dest) or not _in_bounds(*rook_dest):
             continue
-        if not landing_allowed(board[king_dest[0]][king_dest[1]]):
-            continue
-        if not landing_allowed(board[rook_dest[0]][rook_dest[1]]):
-            continue
+        # Every square between the King and Rook must be empty; castling
+        # captures nothing.
         low, high = sorted((col, rook_col))
-        clear = True
-        for path_col in range(low + 1, high):
-            value = board[row][path_col]
-            if value == EMPTY:
-                continue
-            path_pos = (row, path_col)
-            if path_pos in (king_dest, rook_dest) and landing_allowed(value):
-                continue
-            clear = False
-            break
+        clear = all(
+            board[row][path_col] == EMPTY for path_col in range(low + 1, high)
+        )
         if clear:
-            captures = [
-                square
-                for square in (king_dest, rook_dest)
-                if abs(board[square[0]][square[1]]) == BISHOP
-                and (board[square[0]][square[1]] > 0) == mover_is_white
-            ]
-            moves.append((king_dest, captures))
+            moves.append((king_dest, []))
     return _deduplicate_moves(moves)
 
 

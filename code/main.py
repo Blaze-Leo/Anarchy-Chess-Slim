@@ -537,8 +537,6 @@ async def start_match(challenger_sid: str, target_sid: str) -> Optional[Match]:
         target = lobby_users.get(target_sid)
         if challenger is None or target is None or challenger_sid == target_sid:
             return None
-        if challenger.websocket is None or target.websocket is None:
-            return None
         if challenger.active_match_id is not None or target.active_match_id is not None:
             return None
         cancel_expiration(challenger)
@@ -743,11 +741,13 @@ async def handle_do_movement(
                 source,
                 player_colour,
             )
-            # Extract all destination positions, regardless of overlay type.
+            # Only movable (red) destinations count; cosmetic opponent moves
+            # shown in blue are never valid targets.
             possible_positions = [
                 position
                 for overlay_type in ("square", "dot")
-                for positions in engine_moves.get(overlay_type, {}).values()
+                for colour, positions in engine_moves.get(overlay_type, {}).items()
+                if colour == engine.MOVABLE_COLOUR
                 for position in positions
             ]
             if target not in possible_positions:
@@ -1357,9 +1357,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         challenger is None
                         or target is None
                         or challenger.session_id == target.session_id
-                        or challenger.websocket is None
-                        or target.websocket is None
                     ):
+                        print(
+                            "CHALLENGE rejected: "
+                            f"challenger_in_lobby={challenger is not None}, "
+                            f"target_found={target is not None}"
+                        )
+                        await send_to_player(
+                            player,
+                            {
+                                "type": "MATCH_ERROR",
+                                "message": (
+                                    "Could not challenge that player. "
+                                    "Make sure they are in the lobby."
+                                ),
+                            },
+                        )
                         continue
 
                     await send_to_player(
@@ -1390,11 +1403,54 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     )
 
                     if challenger is None:
+                        print(
+                            "ACCEPT_CHALLENGE rejected: challenger "
+                            f"{challenger_public_id} not found in lobby"
+                        )
+                        await send_to_player(
+                            player,
+                            {
+                                "type": "MATCH_ERROR",
+                                "message": (
+                                    "That player is no longer available. "
+                                    "Please try again."
+                                ),
+                            },
+                        )
                         continue
 
                     challenger_sid = challenger.session_id
+                    challenger_name = challenger.username
 
                 match = await start_match(challenger_sid, session_id)
+                if match is None:
+                    print(
+                        "start_match failed: "
+                        f"challenger={challenger_name}({challenger_sid}) "
+                        f"vs accepter={player.username}({session_id})"
+                    )
+                    await send_to_player(
+                        player,
+                        {
+                            "type": "MATCH_ERROR",
+                            "message": (
+                                "Could not start the match. Please try again."
+                            ),
+                        },
+                    )
+                    challenger_now = players.get(challenger_sid)
+                    if challenger_now is not None:
+                        await send_to_player(
+                            challenger_now,
+                            {
+                                "type": "MATCH_ERROR",
+                                "message": (
+                                    "The match could not be started. "
+                                    "Please challenge again."
+                                ),
+                            },
+                        )
+                    await broadcast_lobby_update()
             # ------------------------------------------------
             # Get movement options (display coordinates in, display coordinates out)
             # ------------------------------------------------

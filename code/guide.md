@@ -37,7 +37,7 @@ Pawn rows: White pawns on rows 7-8, Black pawns on rows 1-2. White advances towa
 ## Special Moves
 
 ### Castling (King)
-Available only from the King's starting square, toward a corner Rook that is still on its starting square. The King moves two squares toward that Rook and the Rook lands on the square between them. Every square between the King and Rook must be empty except the two landing squares, each of which may be empty or hold a **friendly Bishop** - a friendly Bishop on a landing square is captured as part of the move.
+Available only from the King's starting square, toward a corner Rook that is still on its starting square. The King moves two squares toward that Rook and the Rook lands on the square between them. Every square between the King and Rook must be empty; castling captures nothing.
 
 ### Queentum Tunnelling (Queen / Antiqueen)
 A Queen may swap squares with a friendly Antiqueen, and an Antiqueen may swap with a friendly Queen. No path requirements; nothing is captured.

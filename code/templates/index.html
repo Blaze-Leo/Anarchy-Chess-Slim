@@ -390,6 +390,13 @@
                 case "MATCH_REQUEST":
                     handleMatchRequest(data);
                     break;
+                case "MATCH_ERROR":
+                    if (currentScreen === "screen-lobby") {
+                        setLobbyStatus(
+                            data.message || "Could not start the match."
+                        );
+                    }
+                    break;
                 case "GAME_START":
                     intentionalNavigation = true;
                     if (data.match_id) {
@@ -399,13 +406,17 @@
                     window.location.href = data.redirect_url;
                     break;
                 case "GAME_STATE":
-                    isGameActive = true;
+                    // A match is active. The real game UI lives on
+                    // /game/{match_id}; navigate there. This also handles a
+                    // player who reconnects (on the lobby page) after their
+                    // match started while they were disconnected.
                     if (data.match_id) {
                         myMatchId = data.match_id;
                     }
-                    document.getElementById("game-status-text").textContent =
-                        `Playing against ${data.opponent_username}`;
-                    updateTurnButton(Boolean(data.is_active));
+                    intentionalNavigation = true;
+                    disconnectWebSocket();
+                    window.location.href =
+                        `/game/${data.match_id}?sid=${mySessionId}`;
                     break;
                 case "TURN_RESULT":
                     handleTurnResult(data);
